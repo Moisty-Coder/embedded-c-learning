@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Debug Program",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror",                   
+                "-Wshadow",                 
+                "-Wconversion",
+                "-std=c99",   
+                "-O0",
+                "-g",
+                "${file}",
+                "-o",
+                "${workspaceFolder}/build/${fileBasenameNoExtension}.exe"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true 
+            },
+            "problemMatcher": "$gcc"
+        }
+    ]
+}
+// Ctrl + Shift + B to check for bugs.

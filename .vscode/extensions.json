@@ -1,0 +1,18 @@
+{
+    "recommendations": [
+        // --- Essential Tools ---
+        "ms-vscode.cpptools",
+        "ms-vscode.makefile-tools",
+        "ms-vscode.cmake-tools",
+        // --- Code Quality & Diagnostics ---
+        "usernamehw.errorlens",
+        "aaron-bond.better-comments",
+        "streetsidesoftware.code-spell-checker",
+        "alefragnani.Bookmarks",
+        // --- Aesthetic & Themes ---
+        "hoovercj.vscode-power-mode",
+        "pkief.material-icon-theme",
+        "zhuangtongfa.material-theme",
+        "oderwat.indent-rainbow"
+    ]
+}
