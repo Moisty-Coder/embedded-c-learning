@@ -373,3 +373,4 @@ void printReport(BMSRegister *registry, size_t size, char *binary)
     // TODO: New Fault Count: 
 }
 
+// *Test
