@@ -101,6 +101,14 @@ typedef enum State
     RESERVED
 } State;
 
+// Constants
+static const MASK_BIT0 = 1 << 0;
+static const MASK_BIT1 = 1 << 1;
+static const MASK_BIT2 = 1 << 2;
+static const MASK_BIT3 = 1 << 3;
+static const MASK_BIT4 = 1 << 4;
+static const MASK_BIT5 = 1 << 5;
+static const MASK_BIT6 = 1 << 6;
 
 // Prototypes
 void setBitPosition(BMSRegister *registry, uint8_t bit_position);
@@ -134,7 +142,7 @@ int main(void)
     char binary[16] = {0};
     size_t size = sizeof(binary) / sizeof(binary[0]);
 
-    for (uint8_t i = 0; i < CHAR_BIT ; i++)
+    for (uint8_t i = 0; i < CHAR_BIT ; i++) //* CHAR_BIT = 8
     {
         uint8_t mask = (1 << i);
         faultCounter(&registry, mask);
@@ -143,7 +151,7 @@ int main(void)
     for (size_t i = 0; i < size; i++)
     {
         uint16_t mask = (1 << i);
-        binary[(size - 1) - i] = checkSetBit(&registry, mask);
+        binary[(size - 1) - i] = checkSetBit(&registry, mask); //* Starting from the right-most bit first
     }
     
     printReport(&registry, size, binary);
@@ -156,27 +164,27 @@ void setBitPosition(BMSRegister *registry, uint8_t bit_position)
     switch (bit_position) // bit_position always clears to 0 each loop
     {
     case OV:
-        registry->protection_reg = registry->protection_reg | 0x1;
+        registry->protection_reg = registry->protection_reg | MASK_BIT0;
         // 0000 0000
         // 0000 0001
         break;
     case UV:
-        registry->protection_reg = registry->protection_reg| 0x2; 
+        registry->protection_reg = registry->protection_reg| MASK_BIT1; 
         break;
     case OCD:
-        registry->protection_reg = registry->protection_reg| 0x4;
+        registry->protection_reg = registry->protection_reg| MASK_BIT2;
         break;
     case OCC:
-        registry->protection_reg = registry->protection_reg| 0x8;
+        registry->protection_reg = registry->protection_reg| MASK_BIT3;
         break;
     case SCD:
-        registry->protection_reg = registry->protection_reg| 0x10;
+        registry->protection_reg = registry->protection_reg| MASK_BIT4;
         break;
     case TEMP_HOT:
-        registry->protection_reg = registry->protection_reg| 0x20;
+        registry->protection_reg = registry->protection_reg| MASK_BIT5;
         break;
     case TEMP_COLD:
-        registry->protection_reg = registry->protection_reg| 0x40;
+        registry->protection_reg = registry->protection_reg| MASK_BIT6;
         break;
     case RESERVED:
         printf("[WARNING] BIT 7 IS RESERVED.\n\n");
@@ -184,7 +192,7 @@ void setBitPosition(BMSRegister *registry, uint8_t bit_position)
     default:
         break;
     }
-} // TODO: Improve this rather than hard coding magic binary numbers
+}
 
 void setRegistry(BMSRegister *registry, uint8_t bit_position)
 {
@@ -337,6 +345,8 @@ void setConfig(BMSRegister *registry)
     registry->protection_reg = registry->protection_reg | buffer_config;
 }
 
+
+
 void faultCounter(BMSRegister *registry, uint8_t bit_position)
 {
     if ((registry->protection_reg & bit_position) == bit_position)
@@ -373,4 +383,3 @@ void printReport(BMSRegister *registry, size_t size, char *binary)
     // TODO: New Fault Count: 
 }
 
-// *Test
