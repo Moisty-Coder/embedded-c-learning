@@ -153,6 +153,9 @@ int main(void)
     }
     
     printReport(&registry, size, binary, set_bits);
+
+    //* Clearing One Fault
+    
     
     return 0;
 }
@@ -231,7 +234,6 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
             break;
         }
     }
-
 }
 
 void cycleCheck(bool *cycleCheck, uint8_t *cycle_index)
@@ -402,7 +404,8 @@ void printReport(const BMSRegister *registry, const size_t size, const char *bin
     printf("Set bits: ");
     printSetBits(set_bits);
 
-    // TODO: Config byte:
+    printf("Config byte: 0xA5\n");
+
     printf("protection_reg binary: ");
     for (size_t i = 0; i < size; i++)
     {
