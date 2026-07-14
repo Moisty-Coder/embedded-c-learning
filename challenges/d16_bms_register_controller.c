@@ -110,16 +110,16 @@ void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bi
 void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
 void cycleCheck(bool *cycleCheck, uint8_t *cycle_index);
 void setConfig(BMSRegister *registry);
-void updateSetBits(uint8_t *set_bits, intmax_t check);
+void updateSetBits(uint8_t *set_bits, const uint8_t check);
 void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, bool *clear_fault_check, uint8_t *cleared_bits);
-void faultCounter(BMSRegister *registry, uint8_t bit_position);
+void faultCounter(BMSRegister *registry, const uint8_t bit_position);
 void printBinary(const BMSRegister *registry);
 void printSetorClearedBits(const uint8_t *set_bits);
 void printReport(const BMSRegister *registry, const uint8_t *set_bits, const bool clear_fault_check, const uint8_t *cleared_bits);
 
 int main(void)
 {
-    printf("BMS REGISTER CONTROLLER\n");
+    printf("\nBMS REGISTER CONTROLLER\n");
     printf("=======================\n\n");
 
     // Declarations
@@ -154,6 +154,11 @@ int main(void)
 
     printf("REPORT 1:\n");
     printReport(&registry, set_bits, clear_fault_check, cleared_bits); // First report
+
+    if ((registry.protection_reg >> CHAR_BIT) == registry.config_byte) // Check if registry is empty  
+    {
+        return 0;
+    }
 
     //* Clearing One Fault
     clearFault(&registry, bit_position, set_bits, &clear_fault_check, cleared_bits);
@@ -335,7 +340,7 @@ void setConfig(BMSRegister *registry)
     registry->protection_reg = registry->protection_reg | buffer_config;
 }
 
-void updateSetBits(uint8_t *set_bits, intmax_t check)
+void updateSetBits(uint8_t *set_bits, const uint8_t check)
 {
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
@@ -440,13 +445,13 @@ void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, 
             registry->protection_reg = registry->protection_reg ^ bit_position;
             *clear_fault_check = true;
             cleared_bits[0] = (uint8_t)check;
-            updateSetBits(set_bits, check);
+            updateSetBits(set_bits, (uint8_t)check);
             break;
         }
     }
 }
 
-void faultCounter(BMSRegister *registry, uint8_t bit_position)
+void faultCounter(BMSRegister *registry, const uint8_t bit_position)
 {
     if ((registry->protection_reg & bit_position) == bit_position)
     {
@@ -477,7 +482,8 @@ void printSetorClearedBits(const uint8_t *set_bits)
 {
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
-        if (set_bits[i] ==  NONE){
+        if (set_bits[i] ==  NONE)
+        {
             break;
         }
         
