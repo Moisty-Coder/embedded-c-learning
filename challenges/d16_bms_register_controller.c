@@ -81,6 +81,7 @@ C has no %b format specifier — you'll need to write a small function that loop
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
+#include <limits.h> // Added this header to guarantee portability across different microcontrollers.
 
 typedef struct BMSRegister
 {
@@ -102,17 +103,14 @@ typedef enum State
     NONE
 } State;
 
-// Constant
-static const uint8_t MAX_CYCLE = 6;
-
 // Prototypes
 void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
-void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
+void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index, bool *cycleCheck);
 void cycleCheck(bool *cycleCheck, uint8_t *cycle_index);
 void setConfig(BMSRegister *registry);
 void updateSetBits(uint8_t *set_bits, const uint8_t check);
 void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, bool *clear_fault_check, uint8_t *cleared_bits);
-void faultCounter(BMSRegister *registry, const uint8_t bit_position);
+void faultCounter(BMSRegister *registry, const uint16_t bit_position);
 void printBinary(const BMSRegister *registry);
 void printSetorClearedBits(const uint8_t *set_bits);
 void printReport(const BMSRegister *registry, const uint8_t *set_bits, const bool clear_fault_check, const uint8_t *cleared_bits);
@@ -136,10 +134,13 @@ int main(void)
         set_bits[i] = NONE; //* Initializing all to NONE first
     }
     
-    while (cycle_check && cycle_index <= MAX_CYCLE)
+    while (cycle_check && cycle_index < CHAR_BIT)
     {
-        setRegistry(&registry, bit_position, set_bits, cycle_index);
-        cycleCheck(&cycle_check, &cycle_index);
+        setRegistry(&registry, bit_position, set_bits, cycle_index, &cycle_check);
+        if (cycle_check)
+        {
+            cycleCheck(&cycle_check, &cycle_index);
+        }
     }
 
     // Setting config byte
@@ -155,7 +156,7 @@ int main(void)
     printf("REPORT 1:\n");
     printReport(&registry, set_bits, clear_fault_check, cleared_bits); // First report
 
-    if ((registry.protection_reg >> CHAR_BIT) == registry.config_byte) // Check if registry is empty  
+    if (registry.protection_reg == (uint16_t)registry.config_byte << CHAR_BIT) // Check if registry is empty  
     {
         return 0;
     }
@@ -181,7 +182,7 @@ void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bi
     set_bits[cycle_index] = bit_position; //* Setting the bit set in order
 }
 
-void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index)
+void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index, bool *cycleCheck)
 {
     while (true)
     {
@@ -216,6 +217,7 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
         if (buffer == endptr)
         {
             printf("CANCELLING SELECTION...\n\n");
+            *cycleCheck = false;
             break;
         }
 
@@ -229,7 +231,7 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
             printf("[ERROR] TRAILING CHARACTERS DETECTED.\n\n");
             continue;
         }
-        
+
         if (check < OV || check > RESERVED)
         {
             printf("[ERROR] INVALID VALUE RANGE\n\n");
@@ -242,9 +244,9 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
             continue;
         }
 
-        if (check > UINT32_MAX)
+        if ((registry->protection_reg & (uint16_t)(1U << check)) != 0 )
         {
-            printf("[ERROR] VALUE EXCEEDS MAXIMUM 32-BIT CAPACITY (%u).\n\n", UINT32_MAX);
+            printf("[ERROR] BIT HAS ALREADY BEEN FLAGGED.\n\n"); //* Check if the bit was already set
             continue;
         }
 
@@ -304,16 +306,10 @@ void cycleCheck(bool *cycleCheck, uint8_t *cycle_index)
             printf("[ERROR] TRAILING CHARACTERS DETECTED.\n\n");
             continue;
         }
-        
+
         if (check < 0 || check > 1)
         {
             printf("[ERROR] INVALID VALUE RANGE\n\n");
-            continue;
-        }
-
-        if (check > UINT32_MAX)
-        {
-            printf("[ERROR] VALUE EXCEEDS MAXIMUM 32-BIT CAPACITY (%u).\n\n", UINT32_MAX);
             continue;
         }
 
@@ -336,7 +332,7 @@ void cycleCheck(bool *cycleCheck, uint8_t *cycle_index)
 
 void setConfig(BMSRegister *registry)
 {
-    uint16_t buffer_config = (registry->config_byte << 8); // 00000000 10100101 -> 10100101 00000000
+    uint16_t buffer_config = ((uint16_t)registry->config_byte << CHAR_BIT); // 00000000 10100101 -> 10100101 00000000
     registry->protection_reg = registry->protection_reg | buffer_config;
 }
 
@@ -417,12 +413,6 @@ void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, 
             continue;
         }
 
-        if (check > UINT32_MAX)
-        {
-            printf("[ERROR] VALUE EXCEEDS MAXIMUM 32-BIT CAPACITY (%u).\n\n", UINT32_MAX);
-            continue;
-        }
-
         bool valid = false;
         for (uint8_t i = 0; i < CHAR_BIT; i++) // Check if the chosen bit is actually set
         {
@@ -441,8 +431,8 @@ void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, 
 
         else
         {
-            bit_position = (1 << check);
-            registry->protection_reg = registry->protection_reg ^ bit_position;
+            bit_position = (uint8_t)(1U << check);
+            registry->protection_reg = registry->protection_reg & ~(uint16_t)bit_position; //* Used & and ~ instead of ^ for better practice
             *clear_fault_check = true;
             cleared_bits[0] = (uint8_t)check;
             updateSetBits(set_bits, (uint8_t)check);
@@ -451,7 +441,7 @@ void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, 
     }
 }
 
-void faultCounter(BMSRegister *registry, const uint8_t bit_position)
+void faultCounter(BMSRegister *registry, const uint16_t bit_position) //* Changed to uint16_t to prevent missmatches
 {
     if ((registry->protection_reg & bit_position) == bit_position)
     {
@@ -480,6 +470,12 @@ void printBinary(const BMSRegister *registry)
 
 void printSetorClearedBits(const uint8_t *set_bits)
 {
+    if (set_bits[0] == NONE) //* Added print statement for an empty list
+    {
+        printf("NONE\n");
+        return;
+    }
+
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
         if (set_bits[i] ==  NONE)
@@ -490,43 +486,43 @@ void printSetorClearedBits(const uint8_t *set_bits)
         switch (set_bits[i])
         {
         case OV:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE) //* Added boundary checking
                 printf("0 (OV), ");
             else
                 printf("0 (OV)\n");
             break;
         case UV:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("1 (UV), ");
             else
                 printf("1 (UV)\n");
             break;
         case OCD:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("2 (OCD), ");
             else
                 printf("2 (OCD)\n");
             break;
         case OCC:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("3 (OCC), ");
             else
                 printf("3 (OCC)\n");
             break;
         case SCD:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("4 (SCD), ");
             else
                 printf("4 (SCD)\n");
             break;
         case TEMP_HOT:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("5 (TEMP_HOT), ");
             else
                 printf("5 (TEMP_HOT)\n");
             break;
         case TEMP_COLD:
-            if (set_bits[i + 1] != NONE)
+            if (i + 1 < CHAR_BIT && set_bits[i + 1] != NONE)
                 printf("6 (TEMP_COLD), ");
             else
                 printf("6 (TEMP_COLD)\n");
@@ -560,4 +556,3 @@ void printReport(const BMSRegister *registry, const uint8_t *set_bits, const boo
         printf("New Fault Count: %u", registry->fault_count);
     }
 }
-
