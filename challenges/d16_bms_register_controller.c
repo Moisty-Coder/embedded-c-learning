@@ -91,34 +91,26 @@ typedef struct BMSRegister
 
 typedef enum State
 {
-    OV = 0,
+    OV = 0, //* Based on selection input
     UV,
     OCD,
     OCC,
     SCD,
     TEMP_HOT,
     TEMP_COLD,
-    RESERVED
+    RESERVED,
+    NONE
 } State;
 
-// Constants
-static const MASK_BIT0 = 1 << 0;
-static const MASK_BIT1 = 1 << 1;
-static const MASK_BIT2 = 1 << 2;
-static const MASK_BIT3 = 1 << 3;
-static const MASK_BIT4 = 1 << 4;
-static const MASK_BIT5 = 1 << 5;
-static const MASK_BIT6 = 1 << 6;
-
 // Prototypes
-void setBitPosition(BMSRegister *registry, uint8_t bit_position);
-void setRegistry(BMSRegister *registry, uint8_t bit_position);
-void cycleCheck(bool *cycleCheck);
+void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
+void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
+void cycleCheck(bool *cycleCheck, uint8_t *cycle_index);
 void setConfig(BMSRegister *registry);
 void faultCounter(BMSRegister *registry, uint8_t bit_position);
 char checkSetBit(const BMSRegister *registry, uint16_t bit_position);
-void printReport(BMSRegister *registry, size_t size, char *binary);
-
+void printSetBits(const uint8_t *set_bits);
+void printReport(const BMSRegister *registry, const size_t size, const char *binary, const uint8_t *set_bits);
 
 int main(void)
 {
@@ -128,11 +120,17 @@ int main(void)
     BMSRegister registry = {0};
     uint8_t bit_position = 0;
     bool cycle_check = true;
-
+    uint8_t cycle_index = 0;
+    uint8_t set_bits[CHAR_BIT];
+    for (uint8_t i = 0; i < CHAR_BIT; i++)
+    {
+        set_bits[i] = NONE; //* Initializing all to NONE first
+    }
+    
     while (cycle_check)
     {
-        setRegistry(&registry, bit_position);
-        cycleCheck(&cycle_check);
+        setRegistry(&registry, bit_position, set_bits, cycle_index);
+        cycleCheck(&cycle_check, &cycle_index);
     }
 
     // Setting config byte
@@ -154,47 +152,18 @@ int main(void)
         binary[(size - 1) - i] = checkSetBit(&registry, mask); //* Starting from the right-most bit first
     }
     
-    printReport(&registry, size, binary);
+    printReport(&registry, size, binary, set_bits);
     
     return 0;
 }
 
-void setBitPosition(BMSRegister *registry, uint8_t bit_position)
+void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index)
 {
-    switch (bit_position) // bit_position always clears to 0 each loop
-    {
-    case OV:
-        registry->protection_reg = registry->protection_reg | MASK_BIT0;
-        // 0000 0000
-        // 0000 0001
-        break;
-    case UV:
-        registry->protection_reg = registry->protection_reg| MASK_BIT1; 
-        break;
-    case OCD:
-        registry->protection_reg = registry->protection_reg| MASK_BIT2;
-        break;
-    case OCC:
-        registry->protection_reg = registry->protection_reg| MASK_BIT3;
-        break;
-    case SCD:
-        registry->protection_reg = registry->protection_reg| MASK_BIT4;
-        break;
-    case TEMP_HOT:
-        registry->protection_reg = registry->protection_reg| MASK_BIT5;
-        break;
-    case TEMP_COLD:
-        registry->protection_reg = registry->protection_reg| MASK_BIT6;
-        break;
-    case RESERVED:
-        printf("[WARNING] BIT 7 IS RESERVED.\n\n");
-        break;
-    default:
-        break;
-    }
+    registry->protection_reg = registry->protection_reg | (1 << bit_position);
+    set_bits[cycle_index] = bit_position; //* Setting the bit set in order
 }
 
-void setRegistry(BMSRegister *registry, uint8_t bit_position)
+void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index)
 {
     while (true)
     {
@@ -258,14 +227,14 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position)
         else
         {
             bit_position = (uint8_t)check;
-            setBitPosition(registry, bit_position);
+            setBitPosition(registry, bit_position, set_bits, cycle_index);
             break;
         }
     }
 
 }
 
-void cycleCheck(bool *cycleCheck)
+void cycleCheck(bool *cycleCheck, uint8_t *cycle_index)
 {
     while (true)
     {
@@ -334,7 +303,10 @@ void cycleCheck(bool *cycleCheck)
                 break;
             }
             else
+            {
+                *cycle_index = *cycle_index + 1;
                 break;
+            }
         }
     }
 }
@@ -344,8 +316,6 @@ void setConfig(BMSRegister *registry)
     uint16_t buffer_config = (registry->config_byte << 8); // 00000000 10100101 -> 10100101 00000000
     registry->protection_reg = registry->protection_reg | buffer_config;
 }
-
-
 
 void faultCounter(BMSRegister *registry, uint8_t bit_position)
 {
@@ -368,9 +338,70 @@ char checkSetBit(const BMSRegister *registry, uint16_t bit_position)
     }
 }
 
-void printReport(BMSRegister *registry, size_t size, char *binary)
+void printSetBits(const uint8_t *set_bits)
 {
-    // TODO: Set bits:
+    for (uint8_t i = 0; i < CHAR_BIT; i++)
+    {
+        if (set_bits[i] ==  NONE){
+            break;
+        }
+        
+        switch (set_bits[i])
+        {
+        case OV:
+            if (set_bits[i + 1] != NONE)
+                printf("0 (OV), ");
+            else
+                printf("0 (OV)\n");
+            break;
+        case UV:
+            if (set_bits[i + 1] != NONE)
+                printf("1 (UV), ");
+            else
+                printf("1 (UV)\n");
+            break;
+        case OCD:
+            if (set_bits[i + 1] != NONE)
+                printf("2 (OCD), ");
+            else
+                printf("2 (OCD)\n");
+            break;
+        case OCC:
+            if (set_bits[i + 1] != NONE)
+                printf("3 (OCC), ");
+            else
+                printf("3 (OCC)\n");
+            break;
+        case SCD:
+            if (set_bits[i + 1] != NONE)
+                printf("4 (SCD), ");
+            else
+                printf("4 (SCD)\n");
+            break;
+        case TEMP_HOT:
+            if (set_bits[i + 1] != NONE)
+                printf("5 (TEMP_HOT), ");
+            else
+                printf("5 (TEMP_HOT)\n");
+            break;
+        case TEMP_COLD:
+            if (set_bits[i + 1] != NONE)
+                printf("6 (TEMP_COLD), ");
+            else
+                printf("0 (TEMP_COLD)\n");
+            break;      
+        default:
+            break;
+        }
+    }
+}
+
+void printReport(const BMSRegister *registry, const size_t size, const char *binary, const uint8_t *set_bits)
+{
+    //* Set bit printing
+    printf("Set bits: ");
+    printSetBits(set_bits);
+
     // TODO: Config byte:
     printf("protection_reg binary: ");
     for (size_t i = 0; i < size; i++)
