@@ -102,32 +102,41 @@ typedef enum State
     NONE
 } State;
 
+// Constant
+static const uint8_t MAX_CYCLE = 6;
+
 // Prototypes
 void setBitPosition(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
 void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, uint8_t cycle_index);
 void cycleCheck(bool *cycleCheck, uint8_t *cycle_index);
 void setConfig(BMSRegister *registry);
+void updateSetBits(uint8_t *set_bits, intmax_t check);
+void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, bool *clear_fault_check, uint8_t *cleared_bits);
 void faultCounter(BMSRegister *registry, uint8_t bit_position);
 void printBinary(const BMSRegister *registry);
-void printSetBits(const uint8_t *set_bits);
-void printReport(const BMSRegister *registry, const uint8_t *set_bits);
+void printSetorClearedBits(const uint8_t *set_bits);
+void printReport(const BMSRegister *registry, const uint8_t *set_bits, const bool clear_fault_check, const uint8_t *cleared_bits);
 
 int main(void)
 {
     printf("BMS REGISTER CONTROLLER\n");
     printf("=======================\n\n");
 
+    // Declarations
     BMSRegister registry = {0};
     uint8_t bit_position = 0;
     bool cycle_check = true;
     uint8_t cycle_index = 0;
     uint8_t set_bits[CHAR_BIT];
+    bool clear_fault_check = false;
+    uint8_t cleared_bits[2] = {NONE, NONE};
+
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
         set_bits[i] = NONE; //* Initializing all to NONE first
     }
     
-    while (cycle_check)
+    while (cycle_check && cycle_index <= MAX_CYCLE)
     {
         setRegistry(&registry, bit_position, set_bits, cycle_index);
         cycleCheck(&cycle_check, &cycle_index);
@@ -143,12 +152,21 @@ int main(void)
         faultCounter(&registry, mask);
     }
 
-    
-    printReport(&registry, set_bits);
+    printf("REPORT 1:\n");
+    printReport(&registry, set_bits, clear_fault_check, cleared_bits); // First report
 
     //* Clearing One Fault
-    
-    
+    clearFault(&registry, bit_position, set_bits, &clear_fault_check, cleared_bits);
+    registry.fault_count = 0;
+    for (uint8_t i = 0; i < CHAR_BIT; i++) //* Recalculating fault_count
+    {
+        uint8_t mask = (1 << i);
+        faultCounter(&registry, mask);
+    }
+
+    printf("\nREPORT 2:\n");
+    printReport(&registry, set_bits, clear_fault_check, cleared_bits); // Second report
+
     return 0;
 }
 
@@ -210,6 +228,12 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
         if (check < OV || check > RESERVED)
         {
             printf("[ERROR] INVALID VALUE RANGE\n\n");
+            continue;
+        }
+
+        if (check == RESERVED)
+        {
+            printf("[ERROR] RESERVED BIT, PLEASE TRY AGAIN.\n\n");
             continue;
         }
 
@@ -311,6 +335,117 @@ void setConfig(BMSRegister *registry)
     registry->protection_reg = registry->protection_reg | buffer_config;
 }
 
+void updateSetBits(uint8_t *set_bits, intmax_t check)
+{
+    for (uint8_t i = 0; i < CHAR_BIT; i++)
+    {
+        if (set_bits[i] == check)
+        {
+            set_bits[i] = NONE;
+            break;
+        }
+    }
+    for (uint8_t i = 0; i < (CHAR_BIT - 1); i++) //* Recursion loop prevent NONE gaps in array
+    {
+        if (set_bits[i] == NONE)
+        {
+            if (set_bits[i+1] != NONE)
+            {
+                set_bits[i] = set_bits[i+1];
+                set_bits[i+1] = NONE;
+            }
+        }
+    }
+}
+
+void clearFault(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits, bool *clear_fault_check, uint8_t *cleared_bits)
+{
+    while (true)
+    {
+        printf("PLEASE SELECT A FLAG TO DISABLE (0-7): ");
+        char buffer[50];
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+        {
+            printf("[ERROR] INPUT MUST BE A VALID VALUE.\n\n");
+            continue;
+        }
+
+        if (strchr(buffer, '\n') == NULL && feof(stdin) == false)
+        {
+            printf("[ERROR] INPUT IS TOO LONG.\n\n");
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+            continue;
+        }
+
+        char *endptr;
+        errno = 0;
+
+        const intmax_t check = strtoimax(buffer, &endptr, 10);
+
+        if (errno == ERANGE)
+        {
+            printf("[ERROR] VALUE IS OUT OF RANGE.\n\n");
+            continue;
+        }
+
+        if (buffer == endptr)
+        {
+            printf("[ERROR] INPUT MUST BE A VALID VALUE.\n\n");
+            continue;
+        }
+
+        while (*endptr != '\0' && isspace((unsigned char)*endptr))
+        {
+            endptr++;
+        }
+
+        if (*endptr != '\0')
+        {
+            printf("[ERROR] TRAILING CHARACTERS DETECTED.\n\n");
+            continue;
+        }
+
+        if (check < OV || check > RESERVED)
+        {
+            printf("[ERROR] INVALID VALUE RANGE\n\n");
+            continue;
+        }
+
+        if (check > UINT32_MAX)
+        {
+            printf("[ERROR] VALUE EXCEEDS MAXIMUM 32-BIT CAPACITY (%u).\n\n", UINT32_MAX);
+            continue;
+        }
+
+        bool valid = false;
+        for (uint8_t i = 0; i < CHAR_BIT; i++) // Check if the chosen bit is actually set
+        {
+            if (set_bits[i] == check)
+            {
+                valid = true;
+                break;
+            }
+        }
+
+        if (valid == false)
+        {
+            printf("[ERROR] CHOSEN BIT IS NOT AN ACTIVATED FAULT.\n\n");
+            continue;
+        }
+
+        else
+        {
+            bit_position = (1 << check);
+            registry->protection_reg = registry->protection_reg ^ bit_position;
+            *clear_fault_check = true;
+            cleared_bits[0] = (uint8_t)check;
+            updateSetBits(set_bits, check);
+            break;
+        }
+    }
+}
+
 void faultCounter(BMSRegister *registry, uint8_t bit_position)
 {
     if ((registry->protection_reg & bit_position) == bit_position)
@@ -338,7 +473,7 @@ void printBinary(const BMSRegister *registry)
     }
 }
 
-void printSetBits(const uint8_t *set_bits)
+void printSetorClearedBits(const uint8_t *set_bits)
 {
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
@@ -388,7 +523,7 @@ void printSetBits(const uint8_t *set_bits)
             if (set_bits[i + 1] != NONE)
                 printf("6 (TEMP_COLD), ");
             else
-                printf("0 (TEMP_COLD)\n");
+                printf("6 (TEMP_COLD)\n");
             break;      
         default:
             break;
@@ -396,11 +531,11 @@ void printSetBits(const uint8_t *set_bits)
     }
 }
 
-void printReport(const BMSRegister *registry, const uint8_t *set_bits)
+void printReport(const BMSRegister *registry, const uint8_t *set_bits, const bool clear_fault_check, const uint8_t *cleared_bits)
 {
     //* Set bit printing
     printf("Set bits: ");
-    printSetBits(set_bits);
+    printSetorClearedBits(set_bits);
 
     printf("Config byte: 0xA5\n");
 
@@ -408,10 +543,15 @@ void printReport(const BMSRegister *registry, const uint8_t *set_bits)
     printf("protection_reg binary: ");
     printBinary(registry);
     
+    if (clear_fault_check == false)
+        printf("\nFault Count: %u\n\n", registry->fault_count);
 
-    printf("\nFault Count: %u", registry->fault_count);
-
-    // TODO: Clear bit:
-    // TODO: New Fault Count: 
+    if (clear_fault_check == true)
+    {
+        printf("\nCleared bit: ");
+        printSetorClearedBits(cleared_bits);
+        
+        printf("New Fault Count: %u", registry->fault_count);
+    }
 }
 
