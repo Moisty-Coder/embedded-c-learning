@@ -108,9 +108,9 @@ void setRegistry(BMSRegister *registry, uint8_t bit_position, uint8_t *set_bits,
 void cycleCheck(bool *cycleCheck, uint8_t *cycle_index);
 void setConfig(BMSRegister *registry);
 void faultCounter(BMSRegister *registry, uint8_t bit_position);
-char checkSetBit(const BMSRegister *registry, uint16_t bit_position);
+void printBinary(const BMSRegister *registry);
 void printSetBits(const uint8_t *set_bits);
-void printReport(const BMSRegister *registry, const size_t size, const char *binary, const uint8_t *set_bits);
+void printReport(const BMSRegister *registry, const uint8_t *set_bits);
 
 int main(void)
 {
@@ -137,22 +137,14 @@ int main(void)
     registry.config_byte = 0xA5;
     setConfig(&registry);
 
-    char binary[16] = {0};
-    size_t size = sizeof(binary) / sizeof(binary[0]);
-
     for (uint8_t i = 0; i < CHAR_BIT ; i++) //* CHAR_BIT = 8
     {
         uint8_t mask = (1 << i);
         faultCounter(&registry, mask);
     }
 
-    for (size_t i = 0; i < size; i++)
-    {
-        uint16_t mask = (1 << i);
-        binary[(size - 1) - i] = checkSetBit(&registry, mask); //* Starting from the right-most bit first
-    }
     
-    printReport(&registry, size, binary, set_bits);
+    printReport(&registry, set_bits);
 
     //* Clearing One Fault
     
@@ -328,15 +320,21 @@ void faultCounter(BMSRegister *registry, uint8_t bit_position)
     }
 }
 
-char checkSetBit(const BMSRegister *registry, uint16_t bit_position)
+void printBinary(const BMSRegister *registry)
 {
-    if ((registry->protection_reg & bit_position) == bit_position)
+    // if ((registry->protection_reg & bit_position) == bit_position)
+    size_t size = sizeof(registry->protection_reg) * CHAR_BIT;
+    for (size_t i = 0; i < size; i++)
     {
-        return '1';
-    }
-    else
-    {
-        return '0';
+        uint16_t mask = (1 << (size - (i+1)));
+        if ((registry->protection_reg & mask) == mask)
+        {
+            printf("1");
+        }
+        else
+        {
+            printf("0");
+        }
     }
 }
 
@@ -398,7 +396,7 @@ void printSetBits(const uint8_t *set_bits)
     }
 }
 
-void printReport(const BMSRegister *registry, const size_t size, const char *binary, const uint8_t *set_bits)
+void printReport(const BMSRegister *registry, const uint8_t *set_bits)
 {
     //* Set bit printing
     printf("Set bits: ");
@@ -406,11 +404,11 @@ void printReport(const BMSRegister *registry, const size_t size, const char *bin
 
     printf("Config byte: 0xA5\n");
 
+    //* Print Binary
     printf("protection_reg binary: ");
-    for (size_t i = 0; i < size; i++)
-    {
-        printf("%c", binary[i]);
-    }
+    printBinary(registry);
+    
+
     printf("\nFault Count: %u", registry->fault_count);
 
     // TODO: Clear bit:
