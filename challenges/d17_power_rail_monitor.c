@@ -65,3 +65,96 @@ Core C Concepts Being Tested:
 -   Combining bit manipulation with struct-based register modeling
 -   Fixed-width types throughout
 */
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <string.h>
+#include <limits.h>
+
+// Structs
+typedef struct RailStatus
+{
+    uint8_t status;
+    uint8_t current_load;
+    uint8_t voltage_band;
+} RailStatus;
+
+typedef struct PowerRailRegister
+{
+    uint32_t rail_register;
+    RailStatus rails[4];
+} PowerRailRegister;
+
+// Enums
+typedef enum RailIndex
+{
+    RAIL_A = 0,
+    RAIL_B = 1,
+    RAIL_C = 2,
+    RAIL_D = 3
+} uint8_t;
+
+// Prototypes
+void inputRailStatus(RailStatus *rails, size_t index);
+
+
+    int main(void)
+{
+    printf("\nPOWER RAIL MONITOR\n");
+    printf("====================\n\n");
+
+    //* Declarations
+    PowerRailRegister registry;
+    size_t size = sizeof(registry.rails) / sizeof(registry.rails[0]);
+
+    //* Input loop for rail A,B,C,D
+    for (size_t i = 0; i < size; i++)
+    {
+        inputRailStatus(registry.rails, i);
+    }
+
+    //* Function 1
+
+
+    //* Debugging
+    printf("%zu", size);
+
+    return 0;
+}
+
+void printCurrentRegistry(size_t index)
+{
+    switch (index)
+    {
+    case 0:
+        /* code */
+        break;
+    
+    default:
+        break;
+    }
+}
+
+//* Input Parsing Function
+void inputParsing()
+{
+    
+}
+
+//* Input Function
+void inputRailStatus(RailStatus *rails, size_t index)
+{
+    while(true)
+    {
+
+    }
+}
+//* Function 1 - 
+
+
+
