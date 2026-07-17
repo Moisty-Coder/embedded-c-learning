@@ -94,35 +94,91 @@ typedef struct PowerRailRegister
 typedef enum RailIndex
 {
     RAIL_A = 0,
-    RAIL_B = 1,
-    RAIL_C = 2,
-    RAIL_D = 3
-} uint8_t;
+    RAIL_B,
+    RAIL_C,
+    RAIL_D
+} RailIndex;
+
+typedef enum Field
+{
+    STATUS = 0,
+    CURRENT_LOAD,
+    VOLTAGE_BAND,
+} Field;
+
+typedef enum StatusLabel
+{
+    STATUS_FIRST = 0,
+    OK = 0,
+    WARN,
+    FAULT,
+    CRITICAL,
+    STATUS_LAST = CRITICAL
+} StatusLabel_t;
+
+typedef enum CurrentLoadLabel
+{
+    CURRENTLOAD_FIRST = 0,
+    IDLE = 0,
+    LOW_CURRENT,
+    MED_CURRENT,
+    HIGH_CURRENT,
+    CURRENTLOAD_LAST = HIGH_CURRENT
+} CurrentLoadLabel_t;
+
+typedef enum VoltageBandLabel
+{
+    VOLTAGEBAND_FIRST = 0,
+    NOMINAL = 0,
+    HIGH_VOLTAGE,
+    LOW_VOLTAGE,
+    INVALID,
+    VOLTAGEBAND_LAST = INVALID
+} VoltageBandLabel_t;
+
+
 
 // Prototypes
+void printCurrentRegistry(size_t index);
+void printValidInputs(uint8_t field_selected);
+void inputParsing(uint8_t *field, uint8_t *field_selected, uint8_t min, uint8_t max);
 void inputRailStatus(RailStatus *rails, size_t index);
 
-
-    int main(void)
+int main(void)
 {
     printf("\nPOWER RAIL MONITOR\n");
     printf("====================\n\n");
 
     //* Declarations
-    PowerRailRegister registry;
+    PowerRailRegister registry = {0};
     size_t size = sizeof(registry.rails) / sizeof(registry.rails[0]);
 
     //* Input loop for rail A,B,C,D
+    printf("~~~USER INPUT~~~\n\n");
     for (size_t i = 0; i < size; i++)
     {
-        inputRailStatus(registry.rails, i);
+        inputRailStatus(&registry.rails[i], i);
     }
 
     //* Function 1
 
 
     //* Debugging
-    printf("%zu", size);
+    printf("%u", registry.rails[0].status);
+    printf("%u", registry.rails[0].current_load);
+    printf("%u", registry.rails[0].voltage_band);
+
+    printf("%u", registry.rails[1].status);
+    printf("%u", registry.rails[1].current_load);
+    printf("%u", registry.rails[1].voltage_band);
+
+    printf("%u", registry.rails[2].status);
+    printf("%u", registry.rails[2].current_load);
+    printf("%u", registry.rails[2].voltage_band);
+
+    printf("%u", registry.rails[3].status);
+    printf("%u", registry.rails[3].current_load);
+    printf("%u", registry.rails[3].voltage_band);
 
     return 0;
 }
@@ -131,28 +187,105 @@ void printCurrentRegistry(size_t index)
 {
     switch (index)
     {
-    case 0:
-        /* code */
+    case RAIL_A:
+        printf("RAIL A:\n");
         break;
-    
+    case RAIL_B:
+        printf("RAIL B:\n");
+        break;
+    case RAIL_C:
+        printf("RAIL C:\n");
+        break;
+    case RAIL_D:
+        printf("RAIL D:\n");
+        break;
+    default:
+        break;
+    }
+}
+
+void printValidInputs(uint8_t field_selected)
+{
+    switch (field_selected)
+    {
+    case STATUS:
+        printf("[STATUS] 0-OK, 1-WARN, 2-FAULT, 3-CRITICAL\n\n");
+        printf("PLEASE INPUT A VALID VALUE: ");
+        break;
+    case CURRENT_LOAD:
+        printf("[CURRENT LOAD] 0-IDLE, 1-LOW, 2-MED, 3-HIGH\n\n");
+        printf("PLEASE INPUT A VALID VALUE: ");
+        break;
+    case VOLTAGE_BAND:
+        printf("[VOLTAGE BAND] 0-NORMAL, 1-HIGH, 2-LOW, 3-INVALID\n\n");
+        printf("PLEASE INPUT A VALID VALUE: ");
+        break;
     default:
         break;
     }
 }
 
 //* Input Parsing Function
-void inputParsing()
+void inputParsing(uint8_t *field, uint8_t *field_selected, uint8_t min, uint8_t max)
 {
-    
+    printValidInputs(*field_selected);
+    while (true)
+    {
+        char buffer[50];
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+        {
+            printf("[ERROR] INPUT MUST BE A VALID VALUE.\n\n");
+            continue;
+        }
+        if (strchr(buffer, '\n') == NULL && feof(stdin) == false)
+        {
+            printf("[ERROR] INPUT IS TOO LONG.\n\n");
+            int c;
+            while((c = getchar()) != '\n' && c != EOF);
+            continue;
+        }
+        char *endptr;
+        errno = 0;
+        const intmax_t check = strtoimax(buffer, &endptr, 10);
+        if (errno == ERANGE)
+        {
+            printf("[ERROR] VALUE IS OUT OF RANGE.\n\n");
+            continue;
+        }
+        if (buffer == endptr)
+        {
+            printf("[ERROR] INPUT MUST BE A VALID VALUE.\n\n");
+            continue;
+        }
+        while (*endptr != '\0' && isspace((unsigned char)*endptr))
+        {
+            endptr++;
+        }
+        if (*endptr != '\0')
+        {
+            printf("[ERROR] TRAILING CHARACTERS DETECTED.\n\n");
+            continue;
+        }
+        if (check < min || check > max)
+        {
+            printf("[ERROR] INPUT VALUE OUT OF RANGE.\n\n");
+            continue;
+        }
+        *field = (uint8_t)check;
+        *field_selected = *field_selected + 1;
+        break;
+    }
 }
 
 //* Input Function
 void inputRailStatus(RailStatus *rails, size_t index)
 {
-    while(true)
-    {
-
-    }
+    printCurrentRegistry(index); // Prints which rail is currently being registered
+    uint8_t field_selected = 0;
+    
+    inputParsing(&rails->status, &field_selected, STATUS_FIRST, STATUS_LAST);
+    inputParsing(&rails->current_load, &field_selected, CURRENTLOAD_FIRST, CURRENTLOAD_LAST);
+    inputParsing(&rails->voltage_band, &field_selected, VOLTAGEBAND_FIRST, VOLTAGEBAND_LAST);
 }
 //* Function 1 - 
 
