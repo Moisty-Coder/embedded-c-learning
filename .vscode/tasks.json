@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Debug Program",
+            "label": "Build Debug",
             "type": "shell",
             "command": "gcc",
             "args": [
@@ -17,27 +17,63 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${workspaceFolder}/build/${fileBasenameNoExtension}"
+                "${workspaceFolder}/build/debug/${fileBasenameNoExtension}"
             ],
             "windows": {
                 "args": [
-                    "-Wall", // enable common warnings
-                    "-Wextra", // enable common warnings
+                    "-Wall",
+                    "-Wextra",
                     "-Wpedantic",
                     "-Werror",
-                    "-Wshadow", // catch variable shadowing (same variable names)
-                    "-Wconversion", // detect implicit narrowing conversion.
+                    "-Wshadow",
+                    "-Wconversion",
                     "-std=c99",
-                    "-O0", // easier debugging
-                    "-g", // generate debug symbols
+                    "-O0",
+                    "-g",
                     "${file}",
                     "-o",
-                    "${workspaceFolder}/build/${fileBasenameNoExtension}.exe"
+                    "${workspaceFolder}/build/debug/${fileBasenameNoExtension}.exe"
                 ]
             },
             "group": {
                 "kind": "build",
                 "isDefault": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Release",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror",
+                "-Wshadow",
+                "-Wconversion",
+                "-std=c99",
+                "-O2",
+                "-DNDEBUG",
+                "${file}",
+                "-o",
+                "${workspaceFolder}/build/release/${fileBasenameNoExtension}"
+            ],
+            "windows": {
+                "args": [
+                    "-Wall",
+                    "-Wextra",
+                    "-Wpedantic",
+                    "-Werror",
+                    "-Wshadow",
+                    "-Wconversion",
+                    "-std=c99",
+                    "-O2",
+                    "-DNDEBUG",
+                    "${file}",
+                    "-o",
+                    "${workspaceFolder}/build/release/${fileBasenameNoExtension}.exe"
+                ]
             },
             "problemMatcher": "$gcc"
         }

@@ -2,27 +2,53 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debugging",
+            "name": "Build Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+            "program": "${workspaceFolder}/build/debug/${fileBasenameNoExtension}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false, // Console stays in VSCode
-            "internalConsoleOptions": "neverOpen", 
+            "internalConsoleOptions": "neverOpen",
             "MIMode": "gdb",
             "miDebuggerPath": "gdb",
-            "preLaunchTask": "Debug Program",
-            "setupCommands": [        
+            "preLaunchTask": "Build Debug",
+            "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
             ],
-            "logging": {              
+            "logging": {
+                "engineLogging": false
+            }
+        },
+
+        {
+            "name": "Build Release",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/release/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false, // Console stays in VSCode
+            "internalConsoleOptions": "neverOpen",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "preLaunchTask": "Build Release",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "logging": {
                 "engineLogging": false
             }
         }
