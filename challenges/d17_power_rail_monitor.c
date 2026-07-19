@@ -136,7 +136,9 @@ typedef enum VoltageBandLabel
     VOLTAGEBAND_LAST = INVALID
 } VoltageBandLabel_t;
 
-
+// Constants
+static const uint8_t FIELD_COUNT = 3U;
+static const uint8_t RESERVED_BIT_MASK = (2 << 6); // 1100 0000
 
 // Prototypes
 void printCurrentRegistry(size_t index);
@@ -144,42 +146,38 @@ void printValidInputs(uint8_t field_selected);
 void inputParsing(uint8_t *field, uint8_t *field_selected, uint8_t min, uint8_t max);
 void inputRailStatus(RailStatus *rails, size_t index);
 
-int main(void)
+
+void setRailFields(PowerRailRegister *registry, RailStatus *rail, size_t index);
+
+void printBinary_8bit(const uint8_t buffer_field);
+void printBinary_32bit(const uint32_t registry);
+
+    int main(void)
 {
     printf("\nPOWER RAIL MONITOR\n");
     printf("====================\n\n");
 
     //* Declarations
     PowerRailRegister registry = {0};
-    size_t size = sizeof(registry.rails) / sizeof(registry.rails[0]);
+    size_t size_registry = sizeof(registry.rails) / sizeof(registry.rails[0]);
 
     //* Input loop for rail A,B,C,D
     printf("~~~USER INPUT~~~\n\n");
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0; i < size_registry; i++)
     {
         inputRailStatus(&registry.rails[i], i);
+        printf("\n");
     }
 
-    //* Function 1
 
+    //* Function 1
+    for (size_t i = 0; i < size_registry; i++)
+    {
+        setRailFields(&registry, &registry.rails[i], i);
+    }
 
     //* Debugging
-    printf("%u", registry.rails[0].status);
-    printf("%u", registry.rails[0].current_load);
-    printf("%u", registry.rails[0].voltage_band);
-
-    printf("%u", registry.rails[1].status);
-    printf("%u", registry.rails[1].current_load);
-    printf("%u", registry.rails[1].voltage_band);
-
-    printf("%u", registry.rails[2].status);
-    printf("%u", registry.rails[2].current_load);
-    printf("%u", registry.rails[2].voltage_band);
-
-    printf("%u", registry.rails[3].status);
-    printf("%u", registry.rails[3].current_load);
-    printf("%u", registry.rails[3].voltage_band);
-
+    
     return 0;
 }
 
@@ -209,15 +207,15 @@ void printValidInputs(uint8_t field_selected)
     switch (field_selected)
     {
     case STATUS:
-        printf("[STATUS] 0-OK, 1-WARN, 2-FAULT, 3-CRITICAL\n\n");
+        printf("[STATUS] 0-OK, 1-WARN, 2-FAULT, 3-CRITICAL\n");
         printf("PLEASE INPUT A VALID VALUE: ");
         break;
     case CURRENT_LOAD:
-        printf("[CURRENT LOAD] 0-IDLE, 1-LOW, 2-MED, 3-HIGH\n\n");
+        printf("[CURRENT LOAD] 0-IDLE, 1-LOW, 2-MED, 3-HIGH\n");
         printf("PLEASE INPUT A VALID VALUE: ");
         break;
     case VOLTAGE_BAND:
-        printf("[VOLTAGE BAND] 0-NORMAL, 1-HIGH, 2-LOW, 3-INVALID\n\n");
+        printf("[VOLTAGE BAND] 0-NOMINAL, 1-HIGH, 2-LOW, 3-INVALID\n");
         printf("PLEASE INPUT A VALID VALUE: ");
         break;
     default:
@@ -228,9 +226,9 @@ void printValidInputs(uint8_t field_selected)
 //* Input Parsing Function
 void inputParsing(uint8_t *field, uint8_t *field_selected, uint8_t min, uint8_t max)
 {
-    printValidInputs(*field_selected);
     while (true)
     {
+        printValidInputs(*field_selected);
         char buffer[50];
         if (fgets(buffer, sizeof(buffer), stdin) == NULL)
         {
@@ -284,10 +282,84 @@ void inputRailStatus(RailStatus *rails, size_t index)
     uint8_t field_selected = 0;
     
     inputParsing(&rails->status, &field_selected, STATUS_FIRST, STATUS_LAST);
+    printf("\n");
     inputParsing(&rails->current_load, &field_selected, CURRENTLOAD_FIRST, CURRENTLOAD_LAST);
+    printf("\n");
     inputParsing(&rails->voltage_band, &field_selected, VOLTAGEBAND_FIRST, VOLTAGEBAND_LAST);
 }
+
 //* Function 1 - 
+void setRailFields(PowerRailRegister *registry, RailStatus *rail, size_t index)
+{
+    uint8_t field_buffer = 0U;
+    for (uint8_t i = 0U; i < FIELD_COUNT; i++)
+    {
+        uint8_t shift_increment = 0U;
+        if (i == STATUS)
+        {
+            field_buffer = field_buffer | rail->status;
 
+        }
+        else if (i == CURRENT_LOAD)
+        {
+            shift_increment = (1 << i); // 1 means it shifts 1 time
+            field_buffer = field_buffer | (rail->current_load << shift_increment);
+        }
+        else if (i == VOLTAGE_BAND)
+        {
+            shift_increment = (1 << i); // 1 means it shifts 1 time
+            field_buffer = field_buffer | (rail->voltage_band << shift_increment);
+        }
+    }
 
+    printBinary_8bit(field_buffer);
+    printf("\n\n"); // DEBUG
 
+    // Checking if reserved bits are 00
+    if ((field_buffer & RESERVED_BIT_MASK) != 0)
+    {
+        printf("\n\n[ERROR] RESERVED BITS ARE SET. ENDING PROGRAM.\n\n");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        uint8_t shift_increment = (uint8_t)index * CHAR_BIT;
+        registry->rail_register = ((uint32_t)field_buffer << shift_increment) | registry->rail_register; // Adding the new bits to the old bits
+        printBinary_32bit(registry->rail_register);
+        printf("\n\n");
+    }
+}
+
+// *Debugging helper
+void printBinary_8bit(const uint8_t buffer_field)
+{
+    size_t size = sizeof(buffer_field) * CHAR_BIT;
+    for (size_t i = 0; i < size; i++)
+    {
+        uint8_t mask = (1 << (size - (i + 1)));
+        if ((buffer_field & mask) == mask)
+        {
+            printf("1");
+        }
+        else
+        {
+            printf("0");
+        }
+    }
+}
+void printBinary_32bit(const uint32_t registry)
+{
+    size_t size = sizeof(registry) * CHAR_BIT;
+    for (size_t i = 0; i < size; i++)
+    {
+        uint32_t mask = (1 << (size - (i + 1)));
+        if ((registry & mask) == mask)
+        {
+            printf("1");
+        }
+        else
+        {
+            printf("0");
+        }
+    }
+}
