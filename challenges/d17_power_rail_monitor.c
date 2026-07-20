@@ -146,8 +146,9 @@ void printValidInputs(uint8_t field_selected);
 void inputParsing(uint8_t *field, uint8_t *field_selected, uint8_t min, uint8_t max);
 void inputRailStatus(RailStatus *rails, size_t index);
 
-
 void setRailFields(PowerRailRegister *registry, RailStatus *rail, size_t index);
+
+StatusLabel_t checkStatus(RailStatus rails[], size_t size);
 
 void printBinary_8bit(const uint8_t buffer_field);
 void printBinary_32bit(const uint32_t registry);
@@ -176,8 +177,30 @@ void printBinary_32bit(const uint32_t registry);
         setRailFields(&registry, &registry.rails[i], i);
     }
 
+    //* Function 3
+    StatusLabel_t worst_case = checkStatus(registry.rails, size_registry); // & not needed because the function check the array directly
+
+
+
     //* Debugging
-    
+    switch (worst_case)
+    {
+    case OK:
+        printf("Worst status: OK");
+        break;
+    case WARN:
+        printf("Worst status: WARN");
+        break;
+    case FAULT:
+        printf("Worst status: FAULT");
+        break;
+    case CRITICAL:
+        printf("Worst status: CRITICAL");
+        break;
+    default:
+        break;
+    }
+
     return 0;
 }
 
@@ -312,9 +335,6 @@ void setRailFields(PowerRailRegister *registry, RailStatus *rail, size_t index)
         }
     }
 
-    printBinary_8bit(field_buffer);
-    printf("\n\n"); // DEBUG
-
     // Checking if reserved bits are 00
     if ((field_buffer & RESERVED_BIT_MASK) != 0)
     {
@@ -323,11 +343,25 @@ void setRailFields(PowerRailRegister *registry, RailStatus *rail, size_t index)
     }
     else
     {
-        uint8_t shift_increment = (uint8_t)index * CHAR_BIT;
+        uint32_t shift_increment = (uint32_t)index * CHAR_BIT;
         registry->rail_register = ((uint32_t)field_buffer << shift_increment) | registry->rail_register; // Adding the new bits to the old bits
         printBinary_32bit(registry->rail_register);
         printf("\n\n");
     }
+}
+
+// *Function 3
+StatusLabel_t checkStatus(RailStatus rails[], size_t size)
+{
+    StatusLabel_t check = OK;
+    for (size_t i = 0; i < size; i++)
+    {
+        if ((StatusLabel_t)rails[i].status > check)
+        {
+            check = (StatusLabel_t)rails[i].status;
+        }
+    }
+    return check;
 }
 
 // *Debugging helper
