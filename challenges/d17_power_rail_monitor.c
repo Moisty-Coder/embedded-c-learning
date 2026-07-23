@@ -93,10 +93,13 @@ typedef struct PowerRailRegister
 // Enums
 typedef enum RailIndex
 {
+    RAIL_FIRST = 0,
     RAIL_A = 0,
     RAIL_B,
     RAIL_C,
-    RAIL_D
+    RAIL_D,
+    RAIL_LAST = RAIL_D,
+    RAIL_COUNT
 } RailIndex;
 
 typedef enum Field
@@ -139,53 +142,73 @@ typedef enum VoltageBandLabel
     VOLTAGEBAND_LAST = VOLTAGEBAND_INVALID
 } VoltageBandLabel_t;
 
-// RESERVED BIT CONSTANT
-static const uint8_t RESERVED_BIT_MASK = (2 << 6); // 1100 0000
+// Constants
+static const uint8_t RESERVED_BIT_MASK = 0xC0; // 1100 0000
+
+// Lookup Tables
+const uint32_t minValues[] =
+{
+    STATUS_FIRST,
+    CURRENTLOAD_FIRST,
+    VOLTAGEBAND_FIRST
+};
+
+const uint32_t maxValues[] =
+{
+    STATUS_LAST,
+    CURRENTLOAD_LAST,
+    VOLTAGEBAND_LAST
+};
+
+// #Defines
+#define STATUS_SHIFT    0U
+#define STATUS_MASK     0x03U
+
+#define LOAD_SHIFT      2U
+#define LOAD_MASK       0x03U
+
+#define VOLTAGE_SHIFT   4U
+#define VOLTAGE_MASK    0x03U
 
 // Prototypes
-void printCurrentRegistry(const size_t index);
+void printRailLabel(const RailIndex selected_rail);
 void printValidInputs(const Field_t field_selected);
-void inputParsing(uint8_t *field, Field_t *field_selected, uint8_t min, uint8_t max);
-void inputRailStatus(RailStatus *rails, const size_t index);
+uint32_t inputParsing(Field_t field_selected, const uint32_t min, const uint32_t max);
+void buildRegistry(PowerRailRegister *registry);
 
-void setRailFields(PowerRailRegister *registry, const RailStatus *rail, const size_t index);
+void extractRailFields(const PowerRailRegister *registry, RailStatus field[]);
 
-StatusLabel_t checkStatus(const RailStatus rails[], const size_t size);
+StatusLabel_t checkStatus(const RailStatus rails[]);
 
 void printBinary_32bit(const uint32_t registry);
 
 const char *getStatusLabelName(const StatusLabel_t status);
 const char *getCurrentLabelName(const CurrentLoadLabel_t current_load);
 const char *getVoltageLabelName(const VoltageBandLabel_t voltage_band);
-void printReport(const RailStatus rails[], const size_t size, const StatusLabel_t worst_case);
+void printReport(const RailStatus rails[], const StatusLabel_t worst_case);
 
 //---------------------------------------------------------
 
-    int main(void)
+int main(void)
 {
+    printf("====================\n");
     printf("\nPOWER RAIL MONITOR\n");
     printf("====================\n\n");
 
     //* Declarations
     PowerRailRegister registry = {0};
-    const size_t size_registry = sizeof(registry.rails) / sizeof(registry.rails[0]);
 
     //* Input loop for rail A,B,C,D
     printf("~~~USER INPUT~~~\n\n");
-    for (size_t i = 0; i < size_registry; i++)
-    {
-        inputRailStatus(&registry.rails[i], i);
-        printf("\n");
-    }
 
     //* Function 1
-    for (size_t i = 0; i < size_registry; i++)
-    {
-        setRailFields(&registry, &registry.rails[i], i);
-    }
+    buildRegistry(&registry);
+
+    //* Function 2
+    extractRailFields(&registry, registry.rails);
 
     //* Function 3
-    const StatusLabel_t worst_case = checkStatus(registry.rails, size_registry); // & not needed because the function checks the array directly
+    const StatusLabel_t worst_case = checkStatus(registry.rails); // & not needed because the function checks the array directly
 
     printf("~~~REPORT~~~\n\n");
 
@@ -193,14 +216,14 @@ void printReport(const RailStatus rails[], const size_t size, const StatusLabel_
     printBinary_32bit(registry.rail_register);
 
     //* Function 5
-    printReport(registry.rails, size_registry, worst_case);
+    printReport(registry.rails, worst_case);
 
     return 0;
 }
 
-void printCurrentRegistry(const size_t index)
+void printRailLabel(const RailIndex selected_rail)
 {
-    switch (index)
+    switch (selected_rail)
     {
     case RAIL_A:
         printf("RAIL A:\n");
@@ -240,25 +263,12 @@ void printValidInputs(const Field_t field_selected)
     }
 }
 
-//* Input Function
-void inputRailStatus(RailStatus *rails, const size_t index)
-{
-    printCurrentRegistry(index); // Prints which rail is currently being registered
-    Field_t field_selected = FIELD_FIRST;
-
-    inputParsing(&rails->status, &field_selected, STATUS_FIRST, STATUS_LAST);
-    printf("\n");
-    inputParsing(&rails->current_load, &field_selected, CURRENTLOAD_FIRST, CURRENTLOAD_LAST);
-    printf("\n");
-    inputParsing(&rails->voltage_band, &field_selected, VOLTAGEBAND_FIRST, VOLTAGEBAND_LAST);
-}
-
 //* Input Parsing Function
-void inputParsing(uint8_t *field, Field_t *field_selected, const uint8_t min, const  uint8_t max)
+uint32_t inputParsing(Field_t field_selected, const uint32_t min, const uint32_t max)
 {
     while (true)
     {
-        printValidInputs(*field_selected);
+        printValidInputs(field_selected);
         char buffer[50];
         if (fgets(buffer, sizeof(buffer), stdin) == NULL)
         {
@@ -299,58 +309,75 @@ void inputParsing(uint8_t *field, Field_t *field_selected, const uint8_t min, co
             printf("[ERROR] INPUT VALUE OUT OF RANGE.\n\n");
             continue;
         }
-        *field = (uint8_t)check;
-        *field_selected = *field_selected + 1; // Increments field selected after input it valid
-        break;
+        else
+        {
+            printf("\n");
+            return (uint32_t)check;
+        }
     }
 }
 
-//* Function 1 - 
-void setRailFields(PowerRailRegister *registry, const RailStatus *rail, const size_t index)
+//* Function 1
+void buildRegistry(PowerRailRegister *registry)
 {
-    uint8_t field_buffer = 0U;
-    for (uint8_t i = 0U; i < FIELD_COUNT; i++)
-    {
-        uint8_t shift_increment = 0U;
-        if (i == FIELD_STATUS)
-        {
-            field_buffer = field_buffer | rail->status;
-
+    for (RailIndex selected_rail = RAIL_FIRST; selected_rail < RAIL_COUNT; selected_rail++)
+    {   
+        printRailLabel(selected_rail);
+        uint32_t rail_buffer = 0U;
+        for (Field_t field = FIELD_FIRST; field < FIELD_COUNT; field++)
+        {   
+            uint32_t field_buffer = inputParsing(field, minValues[field], maxValues[field]);
+            switch (field)
+            {
+            case FIELD_STATUS:
+                rail_buffer = rail_buffer | (field_buffer << STATUS_SHIFT);
+                break;
+            case FIELD_CURRENT_LOAD:
+                rail_buffer = rail_buffer | (field_buffer << LOAD_SHIFT);
+                break;
+            case FIELD_VOLTAGE_BAND:
+                rail_buffer = rail_buffer | (field_buffer << VOLTAGE_SHIFT);
+                break;
+            default:
+                break;
+            }
         }
-        else if (i == FIELD_CURRENT_LOAD)
-        {
-            shift_increment = (1 << i); // 1 means it shifts 1 time
-            field_buffer = field_buffer | (rail->current_load << shift_increment);
-        }
-        else if (i == FIELD_VOLTAGE_BAND)
-        {
-            shift_increment = (1 << i);
-            field_buffer = field_buffer | (rail->voltage_band << shift_increment);
-        }
+        uint32_t clear_mask = ~((uint32_t)0xFFU << (selected_rail * CHAR_BIT)); // Mask to clear any existing set bits to the targeted byte (good practice)
+        registry->rail_register = (registry->rail_register & clear_mask | (uint32_t)(rail_buffer << (selected_rail * CHAR_BIT)));
     }
+}
 
-    // Checking if reserved bits are 00
-    if ((field_buffer & RESERVED_BIT_MASK) != 0U)
+// *Function 2
+void extractRailFields(const PowerRailRegister *registry, RailStatus field[])
+{
+    for (RailIndex selected_rail = RAIL_FIRST; selected_rail < RAIL_COUNT; selected_rail++)
     {
-        printf("\n\n[ERROR] RESERVED BITS ARE SET. ENDING PROGRAM.\n\n");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        const uint32_t shift_increment = (uint32_t)index * CHAR_BIT;
-        registry->rail_register = ((uint32_t)field_buffer << shift_increment) | registry->rail_register; // Adding the new bits to the old bits
+        uint8_t rail_registry_buffer = (uint8_t)(registry->rail_register >> (selected_rail * CHAR_BIT)); // Extracting out individual rail fields
+
+        // Checking if reserved bits are 00 first
+        if ((rail_registry_buffer & RESERVED_BIT_MASK) != 0U)
+        {
+            printf("\n\n[ERROR] RESERVED BITS ARE SET. ENDING PROGRAM.\n\n");
+            exit(EXIT_FAILURE);
+        }
+        else
+        {
+            field[selected_rail].status = ((rail_registry_buffer >> STATUS_SHIFT) & STATUS_MASK);
+            field[selected_rail].current_load = ((rail_registry_buffer >> LOAD_SHIFT) & LOAD_MASK);
+            field[selected_rail].voltage_band = ((rail_registry_buffer >> VOLTAGE_SHIFT) & VOLTAGE_MASK);
+        }
     }
 }
 
 // *Function 3
-StatusLabel_t checkStatus(const RailStatus rails[], const size_t size)
+StatusLabel_t checkStatus(const RailStatus rails[])
 {
     StatusLabel_t check = STATUS_OK;
-    for (size_t i = 0; i < size; i++)
+    for (RailIndex selected_rail = RAIL_FIRST; selected_rail < RAIL_COUNT; selected_rail++)
     {
-        if ((StatusLabel_t)rails[i].status > check)
+        if ((StatusLabel_t)rails[selected_rail].status > check)
         {
-            check = (StatusLabel_t)rails[i].status;
+            check = (StatusLabel_t)rails[selected_rail].status;
         }
     }
     return check;
@@ -361,9 +388,9 @@ void printBinary_32bit(const uint32_t registry)
 {
     printf("Rail Register Binary: ");
     const size_t size = sizeof(registry) * CHAR_BIT;
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0U; i < size; i++)
     {
-        uint32_t mask = (1 << (size - (i + 1)));
+        uint32_t mask = (1U << (size - (i + 1U)));
         if ((registry & mask) == mask)
         {
             printf("1");
@@ -372,12 +399,12 @@ void printBinary_32bit(const uint32_t registry)
         {
             printf("0");
         }
-        if (((i+1) % CHAR_BIT) == 0 && (i != 0)) // Added for spacing between different rails 
+        if (((i+1U) % CHAR_BIT) == 0 && (i != 0U)) // Added for spacing between different rails 
         {
             printf(" ");
         }
     }
-    printf("\n\n");
+    printf("\nHexadecimal: %X\n\n", registry);
 }
 
 // Helper Functions for Field Printing
@@ -394,7 +421,7 @@ const char *getStatusLabelName(const StatusLabel_t status) // A constant pointer
     case STATUS_CRITICAL:
         return "STATUS: CRITICAL(11)";
     default:
-        return "STATUS: UNKNOW STATUS";
+        return "STATUS: UNKNOWN STATUS";
     }
 }
 const char *getCurrentLabelName(const CurrentLoadLabel_t current_load)
@@ -410,7 +437,7 @@ const char *getCurrentLabelName(const CurrentLoadLabel_t current_load)
     case CURRENTLOAD_HIGH_CURRENT:
         return "LOAD: HIGH(11)";
     default:
-        return "LOAD: UNKNOW STATUS";
+        return "LOAD: UNKNOWN STATUS";
     }
 }
 const char *getVoltageLabelName(const VoltageBandLabel_t voltage_band)
@@ -426,19 +453,19 @@ const char *getVoltageLabelName(const VoltageBandLabel_t voltage_band)
     case VOLTAGEBAND_INVALID:
         return "VBAND: INVALID(11)";
     default:
-        return "VBAND: UNKNOW STATUS";
+        return "VBAND: UNKNOWN STATUS";
     }
 }
 
 //* Function 5
-void printReport(const RailStatus rails[], const size_t size, const StatusLabel_t worst_case)
+void printReport(const RailStatus rails[], const StatusLabel_t worst_case)
 {
-    for (size_t i = 0; i < size; i++)
+    for (RailIndex selected_rail = RAIL_FIRST; selected_rail < RAIL_COUNT; selected_rail++)
     {
-        printCurrentRegistry(i);
-        printf("%s\n", getStatusLabelName(rails[i].status));
-        printf("%s\n", getCurrentLabelName(rails[i].current_load)); 
-        printf("%s\n\n",  getVoltageLabelName(rails[i].voltage_band));
+        printRailLabel(selected_rail);
+        printf("%s\n", getStatusLabelName(rails[selected_rail].status));
+        printf("%s\n", getCurrentLabelName(rails[selected_rail].current_load)); 
+        printf("%s\n\n",  getVoltageLabelName(rails[selected_rail].voltage_band));
     }
     switch (worst_case)
     {
@@ -458,3 +485,11 @@ void printReport(const RailStatus rails[], const size_t size, const StatusLabel_
         break;
     }
 }
+
+// *Review:
+// Learned how to use lookup array tables.
+// Learned that you can pass an arr[] parameter function to loop through individual indexes INSIDE the function.
+// Using enums instead of magic numbers where possible.
+// Learned how to handle nested structs with a array of structs.
+// Learned to clear bit fields using ~ and & operators.
+// General knowledge and skill for bitwise operators usage and embedded coding.
