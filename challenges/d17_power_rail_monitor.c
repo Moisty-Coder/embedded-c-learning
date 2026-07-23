@@ -343,7 +343,7 @@ void buildRegistry(PowerRailRegister *registry)
             }
         }
         uint32_t clear_mask = ~((uint32_t)0xFFU << (selected_rail * CHAR_BIT)); // Mask to clear any existing set bits to the targeted byte (good practice)
-        registry->rail_register = (registry->rail_register & clear_mask | (uint32_t)(rail_buffer << (selected_rail * CHAR_BIT)));
+        registry->rail_register = (registry->rail_register & clear_mask) | (uint32_t)(rail_buffer << (selected_rail * CHAR_BIT));
     }
 }
 
